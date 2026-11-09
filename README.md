@@ -4,6 +4,9 @@ An [Omarchy](https://omarchy.org/) shell plugin for [OpenClaw](https://openclaw.
 a native bar widget, a chat panel for your agents, and desktop notifications
 when an agent finishes a task.
 
+> Unofficial community plugin. Not affiliated with or endorsed by the OpenClaw
+> project. The OpenClaw name and logo are used for identification only.
+
 ```
 ┌─ bar ──────────────────────────────────────────────────────────┐
 │  …  󰚩 3   bluetooth   network   audio   power                  │
