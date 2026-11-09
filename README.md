@@ -183,6 +183,48 @@ Per-widget overrides can also be set in `~/.config/omarchy/shell.json`:
 }
 ```
 
+## Removal
+
+```bash
+omarchy plugin remove alexandrlebegue.openclaw
+```
+
+That disables the plugin, unloads it from the shell, and removes the installed
+directory. The plugin's local state and notification icon are intentionally
+left behind; remove them explicitly if you want a clean uninstall:
+
+```bash
+rm -rf ~/.local/state/omarchy-openclaw
+rm -f ~/.local/share/icons/hicolor/256x256/apps/openclaw.png
+rm -f ~/.local/share/icons/hicolor/512x512/apps/openclaw.png
+```
+
+If `~/.config/omarchy/shell.json` still contains an
+`alexandrlebegue.openclaw` entry, remove that object. If you installed from a
+checkout, delete the checkout as well.
+
+## Security and permissions
+
+Like every Omarchy shell plugin, this code runs unsandboxed inside the
+long-lived shell process. The plugin starts one Node bridge as your user. It:
+
+- reads the gateway URL/token from `~/.openclaw/openclaw.json`;
+- reads the OpenClaw device identity from `~/.openclaw/state/openclaw.sqlite`
+  in read-only mode;
+- writes the issued device token and cached agent avatars under
+  `~/.local/state/omarchy-openclaw/` (tokens are written with mode `0600`);
+- installs `openclaw.png` into the user's hicolor icon theme so notifications
+  can use `-i openclaw`;
+- writes plugin settings to `~/.config/omarchy/shell.json` through the Omarchy
+  plugin API;
+- connects only to the configured OpenClaw Gateway (WebSocket) and, when the
+  Gateway provides an external agent-avatar URL, fetches it with a 5 second /
+  2 MB bound.
+
+It does not use `sudo`, does not run repository install hooks, and does not
+execute agent output. The gateway token is never logged. Agent notifications
+are only emitted while the Omarchy panel is closed.
+
 ## How it works
 
 | File | Role |

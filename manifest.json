@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "alexandrlebegue.openclaw",
   "name": "OpenClaw",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "author": "Alexandr Lebegue",
   "license": "MIT",
   "description": "OpenClaw gateway status, agent chat, keyboard shortcuts, and desktop notifications in an Omarchy bar panel.",
