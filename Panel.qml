@@ -123,7 +123,8 @@ Panel {
     }
     function onSelectedKeyChanged() {
       root.syncSessionCursor()
-      root.scrollChatToBottom()
+      if (messageList) messageList.followBottom = true
+      root.scrollChatToBottom(true)
     }
     function onSessionsChanged() {
       if (service.sessions.length === 0) {
@@ -361,10 +362,13 @@ Panel {
     }
   }
 
-  function scrollChatToBottom() {
+  function scrollChatToBottom(force) {
     if (!messageList || messageList.count === 0) return
+    if (force !== true && !messageList.followBottom) return
+    messageList.autoScrolling = true
     messageList.positionViewAtEnd()
     scrollRetry.restart()
+    autoScrollClear.restart()
   }
 
   Timer {
@@ -372,8 +376,25 @@ Panel {
     interval: 50
     repeat: false
     onTriggered: {
-      if (messageList && messageList.count > 0) messageList.positionViewAtEnd()
+      if (!messageList || messageList.count === 0 || !messageList.followBottom) return
+      messageList.autoScrolling = true
+      messageList.positionViewAtEnd()
+      autoScrollClear.restart()
     }
+  }
+
+  Timer {
+    id: autoScrollClear
+    interval: 120
+    repeat: false
+    onTriggered: if (messageList) messageList.autoScrolling = false
+  }
+
+  Timer {
+    id: contentChangeClear
+    interval: 100
+    repeat: false
+    onTriggered: if (messageList) messageList.contentChanging = false
   }
 
   WidgetButton {
@@ -961,11 +982,51 @@ Panel {
                 spacing: Style.space(8)
                 topMargin: Style.space(4)
                 bottomMargin: Style.space(4)
+                property bool followBottom: true
+                property bool autoScrolling: false
+                property bool contentChanging: false
+                property real lastContentY: 0
                 model: service.messages
-                onCountChanged: root.scrollChatToBottom()
-                onContentHeightChanged: root.scrollChatToBottom()
-                onModelChanged: root.scrollChatToBottom()
-                onVisibleChanged: if (visible) root.scrollChatToBottom()
+                onCountChanged: {
+                  contentChanging = true
+                  contentChangeClear.restart()
+                  root.scrollChatToBottom()
+                }
+                onContentHeightChanged: {
+                  contentChanging = true
+                  contentChangeClear.restart()
+                  root.scrollChatToBottom()
+                }
+                onModelChanged: {
+                  contentChanging = true
+                  contentChangeClear.restart()
+                  root.scrollChatToBottom()
+                }
+                onContentYChanged: {
+                  if (autoScrolling) {
+                    lastContentY = contentY
+                    return
+                  }
+                  if (atYEnd) {
+                    followBottom = true
+                    lastContentY = contentY
+                    return
+                  }
+                  if (contentChanging) {
+                    lastContentY = contentY
+                    return
+                  }
+                  if (contentY < lastContentY) followBottom = false
+                  lastContentY = contentY
+                }
+                onMovementStarted: if (!autoScrolling) followBottom = false
+                onMovementEnded: if (!autoScrolling) followBottom = atYEnd
+                onVisibleChanged: {
+                  if (visible) {
+                    followBottom = true
+                    root.scrollChatToBottom(true)
+                  }
+                }
 
                 ScrollBar.vertical: ScrollBar {
                   id: messageScrollBar
