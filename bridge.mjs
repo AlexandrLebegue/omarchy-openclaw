@@ -19,6 +19,7 @@ const TOKENS_FILE = path.join(STATE_DIR, "tokens.json");
 const IDENTITY_FILE = path.join(STATE_DIR, "identity.json");
 const MAX_SESSIONS = clampInt(process.env.OC_MAX_SESSIONS, 20, 3, 100);
 const HISTORY_LIMIT = 80;
+const MAIN_ONLY = process.env.OC_MAIN_ONLY === "1";
 
 fs.mkdirSync(STATE_DIR, { recursive: true });
 
@@ -525,6 +526,7 @@ function applySessions(rows, reason = "") {
   for (const row of rows) {
     const normalized = normalizeSession(row);
     if (!normalized.key) continue;
+    if (MAIN_ONLY && !isMainSessionKey(normalized.key)) continue;
     sessions.set(normalized.key, normalized);
   }
 
@@ -562,6 +564,10 @@ function friendlySessionTitle(row, key) {
     .replace(/[:._-]+/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase())
     .slice(0, 80);
+}
+
+function isMainSessionKey(key) {
+  return /(^|:)main$/.test(String(key || ""));
 }
 
 function normalizeSession(row) {
@@ -629,6 +635,7 @@ async function handleGatewayEvent(event) {
     const row = payload?.session ?? payload?.entry ?? payload?.row;
     if (row && (row.key || row.sessionKey || row.id)) {
       const next = normalizeSession(row);
+      if (MAIN_ONLY && !isMainSessionKey(next.key)) return;
       const old = sessions.get(next.key);
       sessions.set(next.key, next);
       if (old?.active === true && next.active === false) {

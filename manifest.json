@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "alexandrlebegue.openclaw",
   "name": "OpenClaw",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "Alexandr Lebegue",
   "license": "MIT",
   "description": "OpenClaw gateway status, agent chat, keyboard shortcuts, and desktop notifications in an Omarchy bar panel.",
@@ -30,7 +30,7 @@
       "gatewayUrl": "",
       "gatewayToken": "",
       "notifications": true,
-      "notifyOnlyWhenClosed": false,
+      "mainConversationsOnly": false,
       "maxSessions": 20,
       "refreshIntervalSec": 60,
       "nodePath": "/usr/bin/node"
@@ -57,9 +57,9 @@
         "defaultValue": true
       },
       {
-        "key": "notifyOnlyWhenClosed",
+        "key": "mainConversationsOnly",
         "type": "boolean",
-        "label": "Only notify while the panel is closed",
+        "label": "Only main conversations",
         "defaultValue": false
       },
       {

@@ -57,7 +57,7 @@ Item {
   readonly property int maxSessions: Math.max(3, Math.min(100, parseInt(String(setting("maxSessions", 20)), 10) || 20))
   readonly property int refreshIntervalSec: Math.max(15, Math.min(600, parseInt(String(setting("refreshIntervalSec", 60)), 10) || 60))
   readonly property bool notificationsEnabled: setting("notifications", true) !== false
-  readonly property bool notifyOnlyWhenClosed: setting("notifyOnlyWhenClosed", false) === true
+  readonly property bool mainOnly: setting("mainConversationsOnly", false) === true
 
   readonly property var selectedSession: {
     for (var i = 0; i < sessions.length; i++)
@@ -83,7 +83,8 @@ Item {
       String(next.gatewayUrl || ""),
       String(next.gatewayToken || ""),
       Number(next.maxSessions || 20),
-      String(next.nodePath || "/usr/bin/node")
+      String(next.nodePath || "/usr/bin/node"),
+      next.mainConversationsOnly === true ? "1" : "0"
     ])
     var changed = key !== settingsKey
     if (changed) {
@@ -298,7 +299,7 @@ Item {
     }
     finished(session, preview)
     if (!notificationsEnabled) return
-    if (notifyOnlyWhenClosed && panelOpen) return
+    if (panelOpen) return
     var agent = String(session.agentId || "").trim()
     var name = agent || shorten(String(session.title || "OpenClaw"), 40)
     var title = strings.t("notify.finishedTitle").arg(name)
@@ -367,7 +368,8 @@ Item {
     environment: {
       var env = {
         OC_STATE_DIR: Quickshell.env("HOME") + "/.local/state/omarchy-openclaw",
-        OC_MAX_SESSIONS: String(root.maxSessions)
+        OC_MAX_SESSIONS: String(root.maxSessions),
+        OC_MAIN_ONLY: root.mainOnly ? "1" : "0"
       }
       if (root.gatewayUrl.trim() !== "") env.OC_GATEWAY_URL = root.gatewayUrl.trim()
       if (root.gatewayToken.trim() !== "") env.OC_GATEWAY_TOKEN = root.gatewayToken.trim()

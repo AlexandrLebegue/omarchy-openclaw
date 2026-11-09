@@ -18,6 +18,7 @@ Panel {
   readonly property color dim: Qt.darker(foreground, 1.45)
   readonly property color accent: Color.accent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+  readonly property bool notificationsEnabled: root.setting("notifications", true) !== false
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -33,7 +34,7 @@ Panel {
 
   readonly property var settingsRows: [
     { key: "notifications", label: strings.t("settings.notifications"), type: "bool", defaultValue: true },
-    { key: "notifyOnlyWhenClosed", label: strings.t("settings.onlyClosed"), type: "bool", defaultValue: false },
+    { key: "mainConversationsOnly", label: strings.t("settings.mainOnly"), type: "bool", defaultValue: false },
     { key: "maxSessions", label: strings.t("settings.maxSessions"), type: "choice", defaultValue: 20, options: [10, 20, 30, 50, 100] },
     { key: "refreshIntervalSec", label: strings.t("settings.refresh"), type: "choice", defaultValue: 60, options: [30, 60, 120, 300] },
     { key: "close", label: strings.t("settings.close"), type: "action" }
@@ -45,6 +46,7 @@ Panel {
     { key: "Entrée", label: strings.t("help.enter") },
     { key: "i", label: strings.t("help.input") },
     { key: "r", label: strings.t("help.refresh") },
+    { key: "n", label: strings.t("help.notifications") },
     { key: "x", label: strings.t("help.stop") },
     { key: "s / ,", label: strings.t("help.settings") },
     { key: "F1 / ?", label: strings.t("help.help") },
@@ -323,6 +325,10 @@ Panel {
     settingsProcess.running = true
   }
 
+  function toggleNotifications() {
+    persistSetting("notifications", !root.notificationsEnabled)
+  }
+
   function submit() {
     if (input.text.trim() === "") return
     if (service.sendMessage(input.text)) input.text = ""
@@ -478,6 +484,7 @@ Panel {
         else if (text === "i" || text === "I") root.focusSectionNow("input")
         else if (text === "s" || text === "S" || text === ",") root.openSettings()
         else if (text === "?") root.toggleHelp()
+        else if (text === "n" || text === "N") root.toggleNotifications()
         else if (text === "q" || text === "Q") root.close()
         else if (text.length === 1) {
           root.focusSectionNow("input")
@@ -511,19 +518,86 @@ Panel {
           }
           trailingControl: Component {
             Row {
-              spacing: Style.space(2)
-              PanelActionButton {
+              spacing: Style.space(6)
+
+              BorderSurface {
+                id: notifyControl
+                height: Style.space(30)
+                implicitWidth: notifyRow.implicitWidth + Style.space(14)
+                color: root.notificationsEnabled ? Util.alpha(root.accent, 0.10) : "transparent"
+                borderSpec: Border.controlSpec(root.notificationsEnabled ? "selected" : "normal", root.foreground, root.accent)
+                radius: Style.cornerRadius
+
+                MouseArea {
+                  anchors.fill: parent
+                  onClicked: root.toggleNotifications()
+                }
+
+                Row {
+                  id: notifyRow
+                  anchors.centerIn: parent
+                  spacing: Style.space(6)
+
+                  Text {
+                    text: strings.t("panel.notification")
+                    textFormat: Text.PlainText
+                    height: notifySwitch.height
+                    verticalAlignment: Text.AlignVCenter
+                    color: root.notificationsEnabled ? root.accent : root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: root.notificationsEnabled
+                  }
+
+                  ToggleSwitch {
+                    id: notifySwitch
+                    checked: root.notificationsEnabled
+                    trackHeight: Style.space(18)
+                    cursorPad: 0
+                    cursorRing: false
+                    foreground: root.foreground
+                    accent: root.accent
+                    onToggled: root.toggleNotifications()
+                    PanelToolTip {
+                      visible: notifySwitch.containsMouse
+                      text: strings.t("panel.notificationHint")
+                      fontFamily: root.fontFamily
+                    }
+                  }
+                }
+              }
+
+              Button {
+                text: strings.t("panel.settings")
                 iconText: "⚙"
+                bordered: true
+                focusable: false
+                height: Style.space(30)
+                horizontalPadding: Style.space(8)
+                verticalPadding: 0
+                fontSize: Style.font.caption
+                iconSize: Style.font.bodySmall
+                fontFamily: root.fontFamily
+                foreground: root.foreground
+                accent: root.accent
                 tooltipText: strings.t("panel.settings")
-                foreground: root.dim
-                hoverColor: root.accent
                 onClicked: root.openSettings()
               }
-              PanelActionButton {
+
+              Button {
+                text: strings.t("panel.help")
                 iconText: "?"
+                bordered: true
+                focusable: false
+                height: Style.space(30)
+                horizontalPadding: Style.space(8)
+                verticalPadding: 0
+                fontSize: Style.font.caption
+                iconSize: Style.font.bodySmall
+                fontFamily: root.fontFamily
+                foreground: root.foreground
+                accent: root.accent
                 tooltipText: strings.t("panel.shortcuts")
-                foreground: root.dim
-                hoverColor: root.accent
                 onClicked: root.toggleHelp()
               }
             }

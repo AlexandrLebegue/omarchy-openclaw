@@ -30,11 +30,14 @@ OpenClaw panel
 - **One bar icon** with gateway status, active-run pulse, and unread badge.
 - **Native Omarchy panel**: agent/session list, transcript, send, and stop.
 - **Desktop notifications** through `omarchy notification send` when any agent
-  finishes, with the agent name and a short preview. Clicking a notification
-  opens the panel.
+  finishes, with the agent name and a short preview. Notifications are only
+  shown while the panel is closed; clicking one opens the panel.
 - **Full keyboard control**: Tab between agents, transcript, and composer;
-  ↑/↓ to move between discussions; Enter to open one; F1 for the shortcut
-  sheet; `s` for settings.
+  ↑/↓ to move between discussions; Enter to open one; `n` to toggle
+  notifications; F1 for the shortcut sheet; `s` for settings.
+- **Notification toggle** next to the settings gear, mirrored by the `n` key.
+- **Main-conversation filter**: optionally show and notify only the main
+  conversation of each agent.
 - **One shared gateway connection** for every monitor: the plugin is a shell
   service, so the bridge runs once even when the bar exists on several outputs.
 - **Uses your existing OpenClaw credentials**: gateway URL and token are read
@@ -113,6 +116,7 @@ ready to type. The panel is fully usable without the mouse:
 | `Enter` | Open the selected discussion and focus the composer |
 | `i` | Focus the composer |
 | `r` | Refresh sessions |
+| `n` | Toggle desktop notifications |
 | `x` | Stop the active agent |
 | `s` or `,` | Open settings |
 | `F1` or `?` | Open the shortcut sheet |
@@ -154,8 +158,8 @@ Settings exposed in the Omarchy plugin settings:
 | --- | --- | --- |
 | `gatewayUrl` | empty | Override `gateway.remote.url`. |
 | `gatewayToken` | empty | Override `gateway.remote.token`. Leave empty to use the OpenClaw config. |
-| `notifications` | `true` | Notify when an agent finishes. |
-| `notifyOnlyWhenClosed` | `false` | Suppress notifications while the panel is open. |
+| `notifications` | `true` | Notify when an agent finishes (only while the panel is closed). |
+| `mainConversationsOnly` | `false` | Show and notify only the main conversation of each agent. |
 | `maxSessions` | `20` | Number of sessions fetched from the Gateway. |
 | `refreshIntervalSec` | `60` | Fallback session refresh; events are the primary path. |
 | `nodePath` | `/usr/bin/node` | Node.js binary used by the bridge. |
