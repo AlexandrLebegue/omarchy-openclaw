@@ -593,7 +593,7 @@ Panel {
 
               Button {
                 text: strings.t("panel.settings")
-                iconText: "⚙"
+                iconText: "󰒓"
                 bordered: true
                 focusable: false
                 height: Style.space(30)

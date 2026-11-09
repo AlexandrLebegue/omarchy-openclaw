@@ -100,6 +100,10 @@ Item {
   function panelOpened(panel) {
     if (openPanels.indexOf(panel) < 0) openPanels = openPanels.concat([panel])
     panelOpen = openPanels.length > 0
+    if (selectedKey) {
+      markRead(selectedKey)
+      dismissNotificationFor(selectedKey)
+    }
   }
 
   function panelClosed(panel) {
@@ -137,6 +141,7 @@ Item {
     if (!key) return
     selectedKey = key
     markRead(key)
+    dismissNotificationFor(key)
     loadingHistory = true
     sendCommand({ op: "select", sessionKey: key })
   }
@@ -302,11 +307,18 @@ Item {
       body,
       String(session.agentAvatarFile || ""),
       String(session.agentEmoji || ""),
-      String(session.agentName || session.agentId || "OpenClaw")
+      String(session.agentName || session.agentId || "OpenClaw"),
+      key
     )
   }
 
-  function queueNotification(title, body, image, glyph, appName) {
+  function queueNotification(title, body, image, glyph, appName, sessionKey) {
+    var key = String(sessionKey || "")
+    if (key) {
+      var titles = Object.assign({}, notificationTitles)
+      titles[key] = String(title)
+      notificationTitles = titles
+    }
     notifyQueue = notifyQueue.concat([{
       title: String(title),
       body: String(body),
@@ -315,6 +327,25 @@ Item {
       appName: String(appName || "OpenClaw")
     }])
     drainNotifications()
+  }
+
+  function dismissNotificationFor(key) {
+    key = String(key || "")
+    if (!key || !notificationTitles[key]) return
+    var title = String(notificationTitles[key])
+    var next = Object.assign({}, notificationTitles)
+    delete next[key]
+    notificationTitles = next
+    dismissQueue = dismissQueue.concat([title])
+    drainDismissals()
+  }
+
+  function drainDismissals() {
+    if (dismissProcess.running || dismissQueue.length === 0) return
+    var title = dismissQueue[0]
+    dismissQueue = dismissQueue.slice(1)
+    dismissProcess.command = ["omarchy", "notification", "dismiss", title]
+    dismissProcess.running = true
   }
 
   function drainNotifications() {
@@ -341,6 +372,8 @@ Item {
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 
   property var notifyQueue: []
+  property var notificationTitles: ({})
+  property var dismissQueue: []
   property int requestSeq: 0
 
   Timer {
@@ -410,6 +443,11 @@ Item {
         if (text.length > 0) console.warn("openclaw notify", text)
       }
     }
+  }
+
+  Process {
+    id: dismissProcess
+    onExited: root.drainDismissals()
   }
 
   Process {
