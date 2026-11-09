@@ -198,8 +198,10 @@ left behind; remove them explicitly if you want a clean uninstall:
 
 ```bash
 rm -rf ~/.local/state/omarchy-openclaw
-rm -f ~/.local/share/icons/hicolor/256x256/apps/openclaw.png
-rm -f ~/.local/share/icons/hicolor/512x512/apps/openclaw.png
+rm -f ~/.local/share/icons/hicolor/256x256/apps/omarchy-openclaw.png
+rm -f ~/.local/share/icons/hicolor/512x512/apps/omarchy-openclaw.png
+# If you used an early development build, it may also have written:
+# rm -f ~/.local/share/icons/hicolor/{256x256,512x512}/apps/openclaw.png
 ```
 
 If `~/.config/omarchy/shell.json` still contains an
@@ -216,8 +218,8 @@ long-lived shell process. The plugin starts one Node bridge as your user. It:
   in read-only mode;
 - writes the issued device token and cached agent avatars under
   `~/.local/state/omarchy-openclaw/` (tokens are written with mode `0600`);
-- installs `openclaw.png` into the user's hicolor icon theme so notifications
-  can use `-i openclaw`;
+- installs `omarchy-openclaw.png` into the user's hicolor icon theme so
+  notifications can use `-i omarchy-openclaw`;
 - writes plugin settings to `~/.config/omarchy/shell.json` through the Omarchy
   plugin API;
 - connects only to the configured OpenClaw Gateway (WebSocket) and, when the
@@ -237,7 +239,7 @@ are only emitted while the Omarchy panel is closed.
 | `Panel.qml` | Bar widget and `KeyboardPanel` chat UI, plus the settings and shortcut overlays. Binds to the shared service. |
 | `FocusCatcher.qml` | Keyboard dispatcher for Tab, arrows, Enter, F1, Escape, and the single-key actions. |
 | `TintedIcon.qml` | Masks the official OpenClaw PNG with the theme foreground so it stays readable on every theme. |
-| `install-icon.sh` | Installs the logo into the user hicolor icon theme so notifications can use `-i openclaw`. |
+| `install-icon.sh` | Installs the logo into the user hicolor icon theme so notifications can use `-i omarchy-openclaw`. |
 | `i18n/` | English and French catalogs, following the Omarchy language setting. |
 
 ## Troubleshooting

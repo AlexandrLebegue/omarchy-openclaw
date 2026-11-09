@@ -358,7 +358,7 @@ Item {
     } else if (next.glyph !== "") {
       command = command.concat(["--app-name", next.appName, "-g", next.glyph])
     } else {
-      command = command.concat(["--app-name", "OpenClaw", "-i", "openclaw"])
+      command = command.concat(["--app-name", "OpenClaw", "-i", "omarchy-openclaw"])
     }
     command = command.concat([
       "-u", "normal",
