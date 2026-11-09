@@ -1,6 +1,6 @@
 {
   "name": "omarchy-openclaw",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "Omarchy shell plugin for OpenClaw: gateway status, agent chat, and desktop notifications.",

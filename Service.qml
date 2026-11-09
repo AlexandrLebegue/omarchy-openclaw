@@ -295,7 +295,7 @@ Item {
     finished(session, preview)
     if (!notificationsEnabled) return
     if (panelOpen) return
-    var title = strings.t("notify.appName")
+    var title = String(session.agentName || session.agentId || strings.t("notify.appName"))
     var body = preview || strings.t("notify.finishedBody")
     queueNotification(
       title,

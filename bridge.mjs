@@ -737,7 +737,7 @@ async function enrichFinished(session) {
   } catch {
     // The notification is still useful without a preview.
   }
-  emit({ type: "finished", session, preview });
+  emit({ type: "finished", session: withAgentIdentity(session), preview });
 }
 
 // ---------------------------------------------------------------- events
