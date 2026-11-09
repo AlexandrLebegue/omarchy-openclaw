@@ -901,6 +901,7 @@ Panel {
                 spacing: Style.space(8)
                 topMargin: Style.space(4)
                 bottomMargin: Style.space(4)
+                rightMargin: Style.space(10)
                 property bool filledOnce: false
                 model: service.messages
                 onCountChanged: Qt.callLater(function() {
@@ -910,6 +911,26 @@ Panel {
                     messageList.filledOnce = true
                   }
                 })
+
+                ScrollBar.vertical: ScrollBar {
+                  id: messageScrollBar
+                  policy: ScrollBar.AlwaysOn
+                  visible: messageList.contentHeight > messageList.height
+                  width: Style.space(6)
+                  padding: 0
+                  contentItem: Rectangle {
+                    implicitWidth: Style.space(4)
+                    radius: width / 2
+                    color: messageScrollBar.pressed
+                      ? root.accent
+                      : (messageScrollBar.hovered ? Util.alpha(root.accent, 0.75) : Util.alpha(root.foreground, 0.35))
+                  }
+                  background: Rectangle {
+                    implicitWidth: Style.space(6)
+                    radius: width / 2
+                    color: Util.alpha(root.foreground, 0.06)
+                  }
+                }
 
                 delegate: Item {
                   id: messageItem
