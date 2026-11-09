@@ -71,11 +71,6 @@ Item {
     return value === undefined || value === null ? fallback : value
   }
 
-  function shorten(value, max) {
-    var text = String(value || "").replace(/\s+/g, " ").trim()
-    return text.length > max ? text.slice(0, max) + "…" : text
-  }
-
   function applySettings(value) {
     var next = value && typeof value === "object" ? value : ({})
     var key = JSON.stringify(next)
@@ -300,17 +295,25 @@ Item {
     finished(session, preview)
     if (!notificationsEnabled) return
     if (panelOpen) return
-    var agent = String(session.agentId || "").trim()
-    var name = agent || shorten(String(session.title || "OpenClaw"), 40)
-    var title = strings.t("notify.finishedTitle").arg(name)
-    var detail = shorten(String(session.title || ""), 80)
+    var title = strings.t("notify.appName")
     var body = preview || strings.t("notify.finishedBody")
-    if (detail && detail !== name) body = detail + " · " + body
-    queueNotification(title, body)
+    queueNotification(
+      title,
+      body,
+      String(session.agentAvatarFile || ""),
+      String(session.agentEmoji || ""),
+      String(session.agentName || session.agentId || "OpenClaw")
+    )
   }
 
-  function queueNotification(title, body) {
-    notifyQueue = notifyQueue.concat([{ title: String(title), body: String(body) }])
+  function queueNotification(title, body, image, glyph, appName) {
+    notifyQueue = notifyQueue.concat([{
+      title: String(title),
+      body: String(body),
+      image: String(image || ""),
+      glyph: String(glyph || ""),
+      appName: String(appName || "OpenClaw")
+    }])
     drainNotifications()
   }
 
@@ -318,14 +321,20 @@ Item {
     if (notifier.running || notifyQueue.length === 0) return
     var next = notifyQueue[0]
     notifyQueue = notifyQueue.slice(1)
-    notifier.command = [
-      "omarchy", "notification", "send",
-      "--app-name", "OpenClaw",
-      "-i", "openclaw",
+    var command = ["omarchy", "notification", "send"]
+    if (next.image !== "") {
+      command = command.concat(["--app-name", next.appName, "--image", next.image])
+    } else if (next.glyph !== "") {
+      command = command.concat(["--app-name", next.appName, "-g", next.glyph])
+    } else {
+      command = command.concat(["--app-name", "OpenClaw", "-i", "openclaw"])
+    }
+    command = command.concat([
       "-u", "normal",
       next.title, next.body,
       "--exec", "omarchy-shell", "alexandrlebegue.openclaw", "open"
-    ]
+    ])
+    notifier.command = command
     notifier.running = true
   }
 

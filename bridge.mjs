@@ -17,11 +17,13 @@ const HOME = os.homedir();
 const STATE_DIR = process.env.OC_STATE_DIR || path.join(HOME, ".local", "state", "omarchy-openclaw");
 const TOKENS_FILE = path.join(STATE_DIR, "tokens.json");
 const IDENTITY_FILE = path.join(STATE_DIR, "identity.json");
+const AVATAR_DIR = path.join(STATE_DIR, "avatars");
 const MAX_SESSIONS = clampInt(process.env.OC_MAX_SESSIONS, 20, 3, 100);
 const HISTORY_LIMIT = 80;
 const MAIN_ONLY = process.env.OC_MAIN_ONLY === "1";
 
 fs.mkdirSync(STATE_DIR, { recursive: true });
+fs.mkdirSync(AVATAR_DIR, { recursive: true });
 
 // ---------------------------------------------------------------- output
 
@@ -581,8 +583,63 @@ function normalizeAgentIdentity(identity, agentId) {
     name: truncate(name || agentId, 80),
     emoji: truncate(emoji, 8),
     avatar: truncate(avatar, 400000),
+    avatarFile: "",
     avatarSource: truncate(String(identity?.avatarSource ?? ""), 80),
   };
+}
+
+function avatarFileExtension(mime) {
+  const value = String(mime || "").toLowerCase();
+  if (value.includes("svg")) return "svg";
+  if (value.includes("jpeg") || value.includes("jpg")) return "jpg";
+  if (value.includes("webp")) return "webp";
+  return "png";
+}
+
+async function prepareAgentAvatarFile(avatar, agentId) {
+  const value = String(avatar || "").trim();
+  if (!value) return "";
+
+  let bytes = null;
+  let extension = "png";
+
+  if (value.startsWith("data:image/")) {
+    const match = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(value);
+    if (!match) return "";
+    extension = avatarFileExtension(match[1]);
+    bytes = Buffer.from(match[2], "base64");
+  } else if (value.startsWith("file://")) {
+    try {
+      const filePath = decodeURIComponent(new URL(value).pathname);
+      return fs.existsSync(filePath) ? filePath : "";
+    } catch {
+      return "";
+    }
+  } else if (value.startsWith("/")) {
+    return fs.existsSync(value) ? value : "";
+  } else if (/^https?:\/\//i.test(value)) {
+    try {
+      const response = await fetch(value, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) return "";
+      extension = avatarFileExtension(response.headers.get("content-type"));
+      bytes = Buffer.from(await response.arrayBuffer());
+    } catch {
+      return "";
+    }
+  } else {
+    return "";
+  }
+
+  if (!bytes || bytes.length === 0 || bytes.length > 2_000_000) return "";
+  const slug = String(agentId || "agent")
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "agent";
+  const hash = crypto.createHash("sha256").update(String(agentId || "")).digest("hex").slice(0, 8);
+  const filePath = path.join(AVATAR_DIR, `openclaw-agent-${slug}-${hash}.${extension}`);
+  fs.writeFileSync(filePath, bytes);
+  return filePath;
 }
 
 async function ensureAgentIdentities() {
@@ -597,7 +654,9 @@ async function ensureAgentIdentities() {
     agentFetching.add(agentId);
     try {
       const identity = await client.request("agent.identity.get", { agentId }, { timeoutMs: 10000 });
-      agentIdentities.set(agentId, normalizeAgentIdentity(identity, agentId));
+      const normalized = normalizeAgentIdentity(identity, agentId);
+      normalized.avatarFile = await prepareAgentAvatarFile(normalized.avatar, agentId);
+      agentIdentities.set(agentId, normalized);
       changed = true;
     } catch {
       agentIdentities.set(agentId, normalizeAgentIdentity(null, agentId));
@@ -616,6 +675,7 @@ function withAgentIdentity(session) {
     agentName: identity.name,
     agentEmoji: identity.emoji,
     agentAvatar: identity.avatar,
+    agentAvatarFile: identity.avatarFile,
   };
 }
 

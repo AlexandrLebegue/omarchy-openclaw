@@ -36,8 +36,10 @@ OpenClaw panel
   latest message, new messages stay in view, and a themed scrollbar lives in
   its own gutter so it never overlaps the text.
 - **Desktop notifications** through `omarchy notification send` when any agent
-  finishes, with the agent name and a short preview. Notifications are only
-  shown while the panel is closed; clicking one opens the panel.
+  finishes. The toast uses the agent's avatar/emoji (falling back to the
+  OpenClaw logo), keeps the title as **OpenClaw**, and shows the agent reply
+  underneath. Notifications are only shown while the panel is closed; clicking
+  one opens the panel.
 - **Full keyboard control**: Tab between agents, transcript, and composer;
   ↑/↓ to move between discussions; Enter to open one; `n` to toggle
   notifications; F1 for the shortcut sheet; `s` for settings.

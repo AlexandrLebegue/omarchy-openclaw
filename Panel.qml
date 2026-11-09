@@ -772,7 +772,7 @@ Panel {
                       size: parent.width
                       name: modelData.agentName || modelData.agentId || ""
                       emoji: modelData.agentEmoji || ""
-                      avatar: modelData.agentAvatar || ""
+                      avatar: modelData.agentAvatarFile || modelData.agentAvatar || ""
                       foreground: root.foreground
                       accent: root.accent
                     }
@@ -907,7 +907,7 @@ Panel {
                 size: Style.space(30)
                 name: service.selectedSession ? (service.selectedSession.agentName || service.selectedSession.agentId || "") : ""
                 emoji: service.selectedSession ? (service.selectedSession.agentEmoji || "") : ""
-                avatar: service.selectedSession ? (service.selectedSession.agentAvatar || "") : ""
+                avatar: service.selectedSession ? (service.selectedSession.agentAvatarFile || service.selectedSession.agentAvatar || "") : ""
                 foreground: root.foreground
                 accent: root.accent
               }

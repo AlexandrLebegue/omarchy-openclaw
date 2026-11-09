@@ -55,7 +55,7 @@
   "status.pairing": "pairing required",
   "status.offline": "offline",
   "status.error": "error",
-  "notify.finishedTitle": "%1 finished",
+  "notify.appName": "OpenClaw",
   "notify.finishedBody": "The task is finished.",
   "notify.pairingTitle": "OpenClaw: pairing required",
   "notify.pairingBody": "Open the OpenClaw panel to approve this device.",
