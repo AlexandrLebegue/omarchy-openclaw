@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "alexandrlebegue.openclaw",
+  "name": "OpenClaw",
+  "version": "0.1.0",
+  "author": "Alexandr Lebegue",
+  "license": "MIT",
+  "description": "OpenClaw gateway status, agent chat, and desktop notifications in an Omarchy bar panel.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "OpenClaw",
+    "description": "One bar icon and one panel: your OpenClaw agents, their runs, a chat with the selected session, and a desktop notification when an agent finishes.",
+    "category": "AI",
+    "aliases": [
+      "openclaw",
+      "claw",
+      "agents"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "gatewayUrl": "",
+      "gatewayToken": "",
+      "notifications": true,
+      "notifyOnlyWhenClosed": false,
+      "maxSessions": 20,
+      "refreshIntervalSec": 60,
+      "nodePath": "/usr/bin/node"
+    },
+    "schema": [
+      {
+        "key": "gatewayUrl",
+        "type": "string",
+        "label": "Gateway URL override",
+        "defaultValue": "",
+        "description": "Leave empty to use gateway.remote.url from ~/.openclaw/openclaw.json."
+      },
+      {
+        "key": "gatewayToken",
+        "type": "string",
+        "label": "Gateway token override",
+        "defaultValue": "",
+        "description": "Leave empty to use gateway.remote.token from ~/.openclaw/openclaw.json."
+      },
+      {
+        "key": "notifications",
+        "type": "boolean",
+        "label": "Notify when an agent finishes",
+        "defaultValue": true
+      },
+      {
+        "key": "notifyOnlyWhenClosed",
+        "type": "boolean",
+        "label": "Only notify while the panel is closed",
+        "defaultValue": false
+      },
+      {
+        "key": "maxSessions",
+        "type": "integer",
+        "label": "Maximum sessions shown",
+        "min": 3,
+        "max": 100,
+        "step": 1,
+        "defaultValue": 20
+      },
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Fallback refresh interval (seconds)",
+        "min": 15,
+        "max": 600,
+        "step": 15,
+        "defaultValue": 60
+      },
+      {
+        "key": "nodePath",
+        "type": "string",
+        "label": "Node.js binary",
+        "defaultValue": "/usr/bin/node",
+        "description": "Advanced. The bridge needs Node.js 22.19 or newer."
+      }
+    ]
+  }
+}
