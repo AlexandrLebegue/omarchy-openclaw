@@ -267,6 +267,8 @@ let generation = 0;
 let connected = false;
 let pairing = null;
 let sessions = new Map();
+let agentIdentities = new Map();
+let agentFetching = new Set();
 let selectedKey = "";
 let reconnectTimer = null;
 let refreshTimer = null;
@@ -570,6 +572,53 @@ function isMainSessionKey(key) {
   return /(^|:)main$/.test(String(key || ""));
 }
 
+function normalizeAgentIdentity(identity, agentId) {
+  const name = String(identity?.name ?? identity?.displayName ?? agentId ?? "").trim();
+  const emoji = String(identity?.emoji ?? "").trim();
+  const avatar = String(identity?.avatar ?? "").trim();
+  return {
+    agentId,
+    name: truncate(name || agentId, 80),
+    emoji: truncate(emoji, 8),
+    avatar: truncate(avatar, 400000),
+    avatarSource: truncate(String(identity?.avatarSource ?? ""), 80),
+  };
+}
+
+async function ensureAgentIdentities() {
+  if (!client || !connected) return;
+  const ids = new Set();
+  for (const session of sessions.values()) {
+    if (session.agentId) ids.add(session.agentId);
+  }
+  let changed = false;
+  for (const agentId of ids) {
+    if (agentIdentities.has(agentId) || agentFetching.has(agentId)) continue;
+    agentFetching.add(agentId);
+    try {
+      const identity = await client.request("agent.identity.get", { agentId }, { timeoutMs: 10000 });
+      agentIdentities.set(agentId, normalizeAgentIdentity(identity, agentId));
+      changed = true;
+    } catch {
+      agentIdentities.set(agentId, normalizeAgentIdentity(null, agentId));
+    } finally {
+      agentFetching.delete(agentId);
+    }
+  }
+  if (changed) emitSessions("agents");
+}
+
+function withAgentIdentity(session) {
+  const identity = agentIdentities.get(session.agentId);
+  if (!identity) return session;
+  return {
+    ...session,
+    agentName: identity.name,
+    agentEmoji: identity.emoji,
+    agentAvatar: identity.avatar,
+  };
+}
+
 function normalizeSession(row) {
   const key = String(row?.key ?? row?.sessionKey ?? row?.id ?? "");
   const lastActivityAt = Number(
@@ -580,6 +629,9 @@ function normalizeSession(row) {
     key,
     sessionId: String(row?.sessionId ?? row?.sessionIdCurrent ?? ""),
     agentId: String(row?.agentId ?? row?.agent ?? ""),
+    agentName: truncate(String(row?.agentName ?? row?.agent?.name ?? row?.agentId ?? ""), 80),
+    agentEmoji: truncate(String(row?.agentEmoji ?? row?.agent?.emoji ?? ""), 8),
+    agentAvatar: truncate(String(row?.agentAvatar ?? row?.avatar ?? row?.agent?.avatar ?? ""), 400000),
     title: truncate(title || key, 120),
     label: truncate(String(row?.label ?? ""), 80),
     channel: String(row?.channel ?? row?.surface ?? ""),
@@ -593,16 +645,19 @@ function normalizeSession(row) {
 }
 
 function emitSessions(reason = "") {
-  const rows = [...sessions.values()].sort((a, b) => {
-    if (a.active !== b.active) return a.active ? -1 : 1;
-    return b.lastActivityAt - a.lastActivityAt;
-  });
+  const rows = [...sessions.values()]
+    .map(withAgentIdentity)
+    .sort((a, b) => {
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      return b.lastActivityAt - a.lastActivityAt;
+    });
   emit({
     type: "sessions",
     reason,
     sessions: rows,
     activeCount: rows.filter((row) => row.active).length,
   });
+  if (reason !== "agents") ensureAgentIdentities().catch(() => {});
 }
 
 async function enrichFinished(session) {

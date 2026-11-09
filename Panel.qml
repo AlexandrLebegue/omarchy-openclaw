@@ -119,23 +119,11 @@ Panel {
       root.service.queueNotification(strings.t("notify.pairingTitle"), body)
     }
     function onMessagesChanged() {
-      Qt.callLater(function() {
-        if (messageList.count === 0) return
-        if (messageList.atYEnd || !messageList.filledOnce) {
-          messageList.positionViewAtEnd()
-          messageList.filledOnce = true
-        }
-      })
+      root.scrollChatToBottom()
     }
     function onSelectedKeyChanged() {
       root.syncSessionCursor()
-      messageList.filledOnce = false
-      Qt.callLater(function() {
-        if (messageList.count > 0) {
-          messageList.positionViewAtEnd()
-          messageList.filledOnce = true
-        }
-      })
+      root.scrollChatToBottom()
     }
     function onSessionsChanged() {
       if (service.sessions.length === 0) {
@@ -370,6 +358,21 @@ Panel {
       if (!root.opened || root.focusSection !== "sessions") return
       var session = service.sessions[root.sessionCursor]
       if (session && session.key !== service.selectedKey) service.selectSession(session.key)
+    }
+  }
+
+  function scrollChatToBottom() {
+    if (!messageList || messageList.count === 0) return
+    messageList.positionViewAtEnd()
+    scrollRetry.restart()
+  }
+
+  Timer {
+    id: scrollRetry
+    interval: 50
+    repeat: false
+    onTriggered: {
+      if (messageList && messageList.count > 0) messageList.positionViewAtEnd()
     }
   }
 
@@ -750,65 +753,111 @@ Panel {
                   color: root.accent
                 }
 
-                Column {
+                Row {
                   id: sessionContent
                   anchors.left: parent.left
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
                   anchors.leftMargin: Style.space(10)
-                  anchors.rightMargin: Style.space(26)
-                  spacing: Style.space(2)
+                  anchors.rightMargin: Style.space(10)
+                  spacing: Style.space(8)
 
-                  Row {
-                    width: parent.width
-                    spacing: Style.space(6)
+                  Item {
+                    width: Style.space(30)
+                    height: width
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    AgentAvatar {
+                      anchors.fill: parent
+                      size: parent.width
+                      name: modelData.agentName || modelData.agentId || ""
+                      emoji: modelData.agentEmoji || ""
+                      avatar: modelData.agentAvatar || ""
+                      foreground: root.foreground
+                      accent: root.accent
+                    }
 
                     Rectangle {
-                      width: Style.space(6)
+                      visible: modelData.active
+                      width: Style.space(7)
                       height: width
                       radius: width / 2
-                      anchors.verticalCenter: parent.verticalCenter
-                      color: modelData.active ? root.accent : root.dim
-                      opacity: modelData.active ? 1 : 0.55
-                    }
-
-                    Text {
-                      width: parent.width - Style.space(12)
-                      text: modelData.title || modelData.key
-                      textFormat: Text.PlainText
-                      color: sessionRow.selected ? root.accent : root.foreground
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.body
-                      font.bold: sessionRow.selected
-                      elide: Text.ElideRight
+                      anchors.right: parent.right
+                      anchors.bottom: parent.bottom
+                      color: root.accent
+                      border.width: 1
+                      border.color: Color.popups.background
                     }
                   }
 
-                  Text {
-                    width: parent.width
-                    text: modelData.active
-                      ? strings.t("panel.running")
-                      : [modelData.agentId, root.formatTime(modelData.lastActivityAt)].filter(function(value) { return value !== "" }).join(" · ")
-                    textFormat: Text.PlainText
-                    color: root.dim
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideRight
-                  }
-                }
+                  Column {
+                    width: parent.width - Style.space(30) - parent.spacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(1)
 
-                Text {
-                  visible: service.unreadFor(modelData.key) > 0
-                  anchors.right: parent.right
-                  anchors.top: parent.top
-                  anchors.rightMargin: Style.space(8)
-                  anchors.topMargin: Style.space(7)
-                  text: service.unreadFor(modelData.key) > 99 ? "99+" : String(service.unreadFor(modelData.key))
-                  textFormat: Text.PlainText
-                  color: root.accent
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
+                    Row {
+                      width: parent.width
+                      spacing: Style.space(4)
+
+                      Text {
+                        width: parent.width - unreadBadge.width - (unreadBadge.visible ? parent.spacing : 0)
+                        text: modelData.agentName || modelData.agentId || modelData.title || modelData.key
+                        textFormat: Text.PlainText
+                        color: sessionRow.selected ? root.accent : root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.body
+                        font.bold: true
+                        elide: Text.ElideRight
+                      }
+
+                      Rectangle {
+                        id: unreadBadge
+                        visible: service.unreadFor(modelData.key) > 0
+                        implicitWidth: unreadText.implicitWidth + Style.space(8)
+                        implicitHeight: unreadText.implicitHeight + Style.space(2)
+                        radius: height / 2
+                        color: root.accent
+
+                        Text {
+                          id: unreadText
+                          anchors.centerIn: parent
+                          text: service.unreadFor(modelData.key) > 99 ? "99+" : String(service.unreadFor(modelData.key))
+                          textFormat: Text.PlainText
+                          color: Color.background
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.caption
+                          font.bold: true
+                        }
+                      }
+                    }
+
+                    Item {
+                      width: parent.width
+                      height: sessionTitle.implicitHeight
+
+                      Text {
+                        id: sessionTitle
+                        width: parent.width - (timeLabel.visible ? timeLabel.width + Style.space(6) : 0)
+                        text: modelData.title || modelData.key
+                        textFormat: Text.PlainText
+                        color: root.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                      }
+
+                      Text {
+                        id: timeLabel
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.formatTime(modelData.lastActivityAt)
+                        textFormat: Text.PlainText
+                        color: root.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                    }
+                  }
                 }
 
                 MouseArea {
@@ -852,13 +901,26 @@ Panel {
               Layout.fillWidth: true
               spacing: Style.space(8)
 
+              AgentAvatar {
+                Layout.preferredWidth: Style.space(30)
+                Layout.preferredHeight: Style.space(30)
+                size: Style.space(30)
+                name: service.selectedSession ? (service.selectedSession.agentName || service.selectedSession.agentId || "") : ""
+                emoji: service.selectedSession ? (service.selectedSession.agentEmoji || "") : ""
+                avatar: service.selectedSession ? (service.selectedSession.agentAvatar || "") : ""
+                foreground: root.foreground
+                accent: root.accent
+              }
+
               Column {
                 Layout.fillWidth: true
                 spacing: Style.space(1)
 
                 Text {
                   width: parent.width
-                  text: service.selectedSession ? service.selectedSession.title : strings.t("panel.noSessions")
+                  text: service.selectedSession
+                    ? (service.selectedSession.agentName || service.selectedSession.agentId || service.selectedSession.title)
+                    : strings.t("panel.noSessions")
                   textFormat: Text.PlainText
                   color: root.focusSection === "chat" ? root.accent : root.foreground
                   font.family: root.fontFamily
@@ -869,9 +931,7 @@ Panel {
 
                 Text {
                   width: parent.width
-                  text: service.selectedSession
-                    ? [service.selectedSession.agentId, service.selectedSession.model].filter(function(value) { return value !== "" }).join(" · ")
-                    : ""
+                  text: service.selectedSession ? service.selectedSession.title : ""
                   textFormat: Text.PlainText
                   color: root.dim
                   font.family: root.fontFamily
@@ -901,16 +961,11 @@ Panel {
                 spacing: Style.space(8)
                 topMargin: Style.space(4)
                 bottomMargin: Style.space(4)
-                rightMargin: Style.space(10)
-                property bool filledOnce: false
                 model: service.messages
-                onCountChanged: Qt.callLater(function() {
-                  if (messageList.count === 0) return
-                  if (messageList.atYEnd || !messageList.filledOnce) {
-                    messageList.positionViewAtEnd()
-                    messageList.filledOnce = true
-                  }
-                })
+                onCountChanged: root.scrollChatToBottom()
+                onContentHeightChanged: root.scrollChatToBottom()
+                onModelChanged: root.scrollChatToBottom()
+                onVisibleChanged: if (visible) root.scrollChatToBottom()
 
                 ScrollBar.vertical: ScrollBar {
                   id: messageScrollBar
@@ -934,7 +989,7 @@ Panel {
 
                 delegate: Item {
                   id: messageItem
-                  width: ListView.view.width
+                  width: ListView.view.width - Style.space(16)
                   height: messageColumn.implicitHeight + Style.space(10)
 
                   readonly property bool isUser: modelData.role === "user"
@@ -956,7 +1011,11 @@ Panel {
                       horizontalAlignment: messageItem.isUser ? Text.AlignRight : Text.AlignLeft
                       text: messageItem.isUser
                         ? strings.t("panel.you")
-                        : (messageItem.isSystem ? strings.t("panel.system") : strings.t("panel.assistant"))
+                        : (messageItem.isSystem
+                          ? strings.t("panel.system")
+                          : (service.selectedSession
+                            ? String(service.selectedSession.agentName || service.selectedSession.agentId || strings.t("panel.assistant")).toUpperCase()
+                            : strings.t("panel.assistant")))
                       textFormat: Text.PlainText
                       color: messageItem.isUser ? root.accent : root.dim
                       font.family: root.fontFamily

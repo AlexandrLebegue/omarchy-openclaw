@@ -29,6 +29,12 @@ OpenClaw panel
   notifications, tinted to the active Omarchy theme.
 - **One bar icon** with gateway status, active-run pulse, and unread badge.
 - **Native Omarchy panel**: agent/session list, transcript, send, and stop.
+- **Agent identity**: the gateway's agent name and avatar (or emoji/initial
+  fallback) are shown in the conversation list and chat header. The list puts
+  the agent name first and the conversation preview underneath.
+- **Transcript stays at the bottom**: opening a conversation starts on the
+  latest message, new messages stay in view, and a themed scrollbar lives in
+  its own gutter so it never overlaps the text.
 - **Desktop notifications** through `omarchy notification send` when any agent
   finishes, with the agent name and a short preview. Notifications are only
   shown while the panel is closed; clicking one opens the panel.
