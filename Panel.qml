@@ -6,6 +6,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
+import "Markdown.js" as Markdown
 
 Panel {
   id: root
@@ -21,7 +22,36 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
+  property string focusSection: "sessions"
+  property string pendingFocus: "sessions"
+  property int sessionCursor: 0
+  property bool settingsOpen: false
+  property bool helpOpen: false
+  property int settingsCursor: 0
+
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
+
+  readonly property var settingsRows: [
+    { key: "notifications", label: strings.t("settings.notifications"), type: "bool", defaultValue: true },
+    { key: "notifyOnlyWhenClosed", label: strings.t("settings.onlyClosed"), type: "bool", defaultValue: false },
+    { key: "maxSessions", label: strings.t("settings.maxSessions"), type: "choice", defaultValue: 20, options: [10, 20, 30, 50, 100] },
+    { key: "refreshIntervalSec", label: strings.t("settings.refresh"), type: "choice", defaultValue: 60, options: [30, 60, 120, 300] },
+    { key: "close", label: strings.t("settings.close"), type: "action" }
+  ]
+
+  readonly property var shortcutRows: [
+    { key: "Tab / Shift+Tab", label: strings.t("help.focus") },
+    { key: "↑ / ↓", label: strings.t("help.move") },
+    { key: "Entrée", label: strings.t("help.enter") },
+    { key: "i", label: strings.t("help.input") },
+    { key: "r", label: strings.t("help.refresh") },
+    { key: "x", label: strings.t("help.stop") },
+    { key: "s / ,", label: strings.t("help.settings") },
+    { key: "F1 / ?", label: strings.t("help.help") },
+    { key: "Échap", label: strings.t("help.close") },
+    { key: "Clic droit", label: strings.t("help.rightClick") },
+    { key: "Super + Alt + O", label: strings.t("help.global") }
+  ]
 
   property bool serviceResolved: false
   property var service: ({
@@ -86,6 +116,33 @@ Panel {
       if (command) body = body + " " + command
       root.service.queueNotification(strings.t("notify.pairingTitle"), body)
     }
+    function onMessagesChanged() {
+      Qt.callLater(function() {
+        if (messageList.count === 0) return
+        if (messageList.atYEnd || !messageList.filledOnce) {
+          messageList.positionViewAtEnd()
+          messageList.filledOnce = true
+        }
+      })
+    }
+    function onSelectedKeyChanged() {
+      root.syncSessionCursor()
+      messageList.filledOnce = false
+      Qt.callLater(function() {
+        if (messageList.count > 0) {
+          messageList.positionViewAtEnd()
+          messageList.filledOnce = true
+        }
+      })
+    }
+    function onSessionsChanged() {
+      if (service.sessions.length === 0) {
+        root.sessionCursor = 0
+        return
+      }
+      root.sessionCursor = Math.max(0, Math.min(root.sessionCursor, service.sessions.length - 1))
+      if (sessionList) sessionList.currentIndex = root.sessionCursor
+    }
   }
 
   function statusText() {
@@ -132,18 +189,138 @@ Panel {
     return Qt.formatDate(date, "dd/MM")
   }
 
-  function moveSelection(dy) {
-    if (service.sessions.length === 0) return
-    var index = 0
-    for (var i = 0; i < service.sessions.length; i++) {
-      if (service.sessions[i].key === service.selectedKey) { index = i; break }
-    }
-    index = Math.max(0, Math.min(service.sessions.length - 1, index + dy))
-    service.selectSession(service.sessions[index].key)
+  function clamp(value, minimum, maximum) {
+    return Math.max(minimum, Math.min(maximum, value))
   }
 
-  function activateSelection() {
-    if (!input.activeFocus) input.forceActiveFocus()
+  function syncSessionCursor() {
+    if (service.sessions.length === 0) {
+      sessionCursor = 0
+      return
+    }
+    var found = -1
+    for (var i = 0; i < service.sessions.length; i++) {
+      if (service.sessions[i].key === service.selectedKey) { found = i; break }
+    }
+    if (found >= 0) sessionCursor = found
+    sessionCursor = clamp(sessionCursor, 0, service.sessions.length - 1)
+    if (sessionList) sessionList.currentIndex = sessionCursor
+  }
+
+  function focusSectionNow(section) {
+    focusSection = section
+    if (section === "input") {
+      Qt.callLater(function() { input.forceActiveFocus() })
+    } else {
+      Qt.callLater(function() { catcher.forceActiveFocus() })
+    }
+    if (section === "sessions") syncSessionCursor()
+  }
+
+  function cycleFocus(direction) {
+    var order = ["sessions", "chat", "input"]
+    var index = order.indexOf(focusSection)
+    if (index < 0) index = 0
+    index = (index + direction + order.length) % order.length
+    focusSectionNow(order[index])
+  }
+
+  function openPanel(section) {
+    pendingFocus = section || "sessions"
+    if (!opened) open()
+    else focusSectionNow(pendingFocus)
+  }
+
+  function togglePanel(section) {
+    if (opened) close()
+    else openPanel(section || "sessions")
+  }
+
+  function moveSession(dy) {
+    if (service.sessions.length === 0) return
+    sessionCursor = clamp(sessionCursor + dy, 0, service.sessions.length - 1)
+    if (sessionList) {
+      sessionList.currentIndex = sessionCursor
+      sessionList.positionViewAtIndex(sessionCursor, ListView.Contain)
+    }
+    cursorSelectTimer.restart()
+  }
+
+  function selectCursorSession() {
+    if (service.sessions.length === 0) return
+    var session = service.sessions[sessionCursor]
+    if (!session) return
+    service.selectSession(session.key)
+    focusSectionNow("input")
+  }
+
+  function scrollChat(dy) {
+    var step = Style.space(56)
+    var maximum = Math.max(0, messageList.contentHeight - messageList.height)
+    messageList.contentY = clamp(messageList.contentY + dy * step, 0, maximum)
+  }
+
+  function openSettings() {
+    settingsOpen = true
+    helpOpen = false
+    settingsCursor = 0
+    input.focus = false
+    Qt.callLater(function() { catcher.forceActiveFocus() })
+  }
+
+  function closeSettings() {
+    settingsOpen = false
+    focusSectionNow("sessions")
+  }
+
+  function toggleHelp() {
+    helpOpen = !helpOpen
+    if (helpOpen) {
+      settingsOpen = false
+      input.focus = false
+      Qt.callLater(function() { catcher.forceActiveFocus() })
+    } else {
+      focusSectionNow("sessions")
+    }
+  }
+
+  function settingDisplay(row) {
+    if (row.type === "bool") return root.setting(row.key, row.defaultValue) ? strings.t("settings.on") : strings.t("settings.off")
+    if (row.type === "choice") return String(root.setting(row.key, row.defaultValue))
+    return ""
+  }
+
+  function toggleSetting(index) {
+    var row = settingsRows[index]
+    if (!row) return
+    if (row.type === "action") { closeSettings(); return }
+    if (row.type === "bool") {
+      persistSetting(row.key, !root.setting(row.key, row.defaultValue))
+      return
+    }
+    if (row.type === "choice") {
+      var options = row.options || []
+      var current = root.setting(row.key, row.defaultValue)
+      var position = options.indexOf(current)
+      if (position < 0) position = 0
+      persistSetting(row.key, options[(position + 1) % options.length])
+    }
+  }
+
+  function moveSettings(dy) {
+    settingsCursor = clamp(settingsCursor + dy, 0, settingsRows.length - 1)
+  }
+
+  function persistSetting(key, value) {
+    var next = Object.assign({}, root.settings)
+    next[key] = value
+    root.settings = next
+    var host = root.bar && root.bar.shell ? root.bar.shell : null
+    if (host && typeof host.updateEntryInline === "function") {
+      try { host.updateEntryInline(root.moduleName, next); return } catch (e) {}
+    }
+    settingsProcess.command = ["omarchy", "bar", "set", root.moduleName, key, JSON.stringify(value), "--json"]
+    settingsProcess.running = true
   }
 
   function submit() {
@@ -164,7 +341,29 @@ Panel {
     }
     if (opened) {
       if (serviceResolved) service.refresh()
-      Qt.callLater(function() { input.forceActiveFocus() })
+      focusSection = pendingFocus
+      pendingFocus = "sessions"
+      settingsOpen = false
+      helpOpen = false
+      syncSessionCursor()
+      Qt.callLater(function() {
+        if (focusSection === "input") input.forceActiveFocus()
+        else catcher.forceActiveFocus()
+      })
+    } else {
+      settingsOpen = false
+      helpOpen = false
+      input.focus = false
+    }
+  }
+
+  Timer {
+    id: cursorSelectTimer
+    interval: 180
+    onTriggered: {
+      if (!root.opened || root.focusSection !== "sessions") return
+      var session = service.sessions[root.sessionCursor]
+      if (session && session.key !== service.selectedKey) service.selectSession(session.key)
     }
   }
 
@@ -177,8 +376,9 @@ Panel {
     tooltipText: root.tooltipText()
     active: service.activeCount > 0 || service.unread > 0
     onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton || buttonCode === Qt.MiddleButton) service.refresh()
-      else root.toggle()
+      if (buttonCode === Qt.RightButton) root.openPanel("input")
+      else if (buttonCode === Qt.MiddleButton) service.refresh()
+      else root.togglePanel("sessions")
     }
 
     Row {
@@ -191,7 +391,7 @@ Panel {
         height: width
         anchors.verticalCenter: parent.verticalCenter
         iconSize: width
-        source: Qt.resolvedUrl("assets/openclaw.svg")
+        source: Qt.resolvedUrl("assets/openclaw.png")
         color: button.active ? (root.bar ? root.bar.urgent : Color.urgent) : root.foreground
       }
 
@@ -230,20 +430,63 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: catcher
-    contentWidth: panel.fittedContentWidth(Style.space(820))
+    margin: Style.space(8)
+    contentWidth: panel.fittedContentWidth(Style.space(720))
     contentHeight: panel.fittedContentHeight(Style.space(620), Style.space(720))
 
-    PanelKeyCatcher {
+    FocusCatcher {
       id: catcher
       anchors.fill: parent
-      blocked: input.activeFocus
-      onCloseRequested: root.close()
-      onMoveRequested: function(dx, dy) { if (dy !== 0) root.moveSelection(dy) }
-      onActivateRequested: root.activateSelection()
-      onReturnRequested: root.activateSelection()
+      blocked: root.focusSection === "input" && !root.settingsOpen && !root.helpOpen
+      onHelpRequested: root.toggleHelp()
+      onCloseRequested: {
+        if (root.helpOpen) {
+          root.helpOpen = false
+          root.focusSectionNow("sessions")
+        } else if (root.settingsOpen) {
+          root.closeSettings()
+        } else {
+          root.close()
+        }
+      }
+      onMoveRequested: function(dx, dy) {
+        if (root.helpOpen) return
+        if (root.settingsOpen) { root.moveSettings(dy); return }
+        if (root.focusSection === "sessions") root.moveSession(dy)
+        else if (root.focusSection === "chat") root.scrollChat(dy)
+      }
+      onActivateRequested: {
+        if (root.helpOpen) return
+        if (root.settingsOpen) { root.toggleSetting(root.settingsCursor); return }
+        if (root.focusSection === "sessions") root.selectCursorSession()
+        else if (root.focusSection === "chat") root.focusSectionNow("input")
+      }
+      onDeleteRequested: {
+        if (!root.helpOpen && !root.settingsOpen && root.focusSection !== "input" && service.selectedActive)
+          service.abort()
+      }
       onTextKey: function(text) {
+        if (root.helpOpen) {
+          if (text === "?") root.toggleHelp()
+          return
+        }
+        if (root.settingsOpen) {
+          if (text === "s" || text === "S" || text === ",") root.closeSettings()
+          return
+        }
         if (text === "r" || text === "R") service.refresh()
-        else if (text === "i" || text === "I") input.forceActiveFocus()
+        else if (text === "i" || text === "I") root.focusSectionNow("input")
+        else if (text === "s" || text === "S" || text === ",") root.openSettings()
+        else if (text === "?") root.toggleHelp()
+        else if (text === "q" || text === "Q") root.close()
+        else if (text.length === 1) {
+          root.focusSectionNow("input")
+          input.text += text
+          input.cursorPosition = input.text.length
+        }
+      }
+      onTabRequested: function(direction) {
+        if (!root.helpOpen && !root.settingsOpen) root.cycleFocus(direction)
       }
 
       ColumnLayout {
@@ -262,8 +505,27 @@ Panel {
               implicitWidth: Style.font.display
               implicitHeight: Style.font.display
               iconSize: Style.font.display
-              source: Qt.resolvedUrl("assets/openclaw.svg")
+              source: Qt.resolvedUrl("assets/openclaw.png")
               color: root.foreground
+            }
+          }
+          trailingControl: Component {
+            Row {
+              spacing: Style.space(2)
+              PanelActionButton {
+                iconText: "⚙"
+                tooltipText: strings.t("panel.settings")
+                foreground: root.dim
+                hoverColor: root.accent
+                onClicked: root.openSettings()
+              }
+              PanelActionButton {
+                iconText: "?"
+                tooltipText: strings.t("panel.shortcuts")
+                foreground: root.dim
+                hoverColor: root.accent
+                onClicked: root.toggleHelp()
+              }
             }
           }
         }
@@ -361,14 +623,14 @@ Panel {
           spacing: Style.space(14)
 
           ColumnLayout {
-            Layout.preferredWidth: Style.space(230)
+            Layout.preferredWidth: Style.space(210)
             Layout.fillHeight: true
             spacing: Style.space(6)
 
             Text {
               text: strings.t("panel.agents")
               textFormat: Text.PlainText
-              color: root.dim
+              color: root.focusSection === "sessions" ? root.accent : root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
               font.bold: true
@@ -389,17 +651,29 @@ Panel {
                 height: sessionContent.implicitHeight + Style.space(14)
 
                 readonly property bool selected: modelData.key === service.selectedKey
+                readonly property bool cursor: root.focusSection === "sessions" && index === root.sessionCursor
                 readonly property bool hovered: sessionMouse.containsMouse
 
                 BorderSurface {
                   anchors.fill: parent
                   color: sessionRow.selected
-                    ? Style.selectedStateColor(root.foreground, root.accent)
-                    : (sessionRow.hovered ? Style.hoverFillFor(root.foreground, root.accent) : "transparent")
-                  borderSpec: sessionRow.selected
-                    ? Border.controlSpec("selected", root.foreground, root.accent)
+                    ? Util.alpha(root.accent, 0.12)
+                    : (sessionRow.cursor ? Util.alpha(root.foreground, 0.06)
+                      : (sessionRow.hovered ? Style.hoverFillFor(root.foreground, root.accent) : "transparent"))
+                  borderSpec: sessionRow.cursor
+                    ? Border.controlSpec("focus", root.foreground, root.accent)
                     : Border.none()
                   radius: Style.cornerRadius
+                }
+
+                Rectangle {
+                  visible: sessionRow.selected
+                  anchors.left: parent.left
+                  anchors.top: parent.top
+                  anchors.bottom: parent.bottom
+                  width: Style.space(2)
+                  radius: width / 2
+                  color: root.accent
                 }
 
                 Column {
@@ -440,7 +714,7 @@ Panel {
                     width: parent.width
                     text: modelData.active
                       ? strings.t("panel.running")
-                      : (modelData.agentId || modelData.model || modelData.channel || "")
+                      : [modelData.agentId, root.formatTime(modelData.lastActivityAt)].filter(function(value) { return value !== "" }).join(" · ")
                     textFormat: Text.PlainText
                     color: root.dim
                     font.family: root.fontFamily
@@ -468,7 +742,10 @@ Panel {
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
-                  onClicked: service.selectSession(modelData.key)
+                  onClicked: {
+                    root.sessionCursor = index
+                    service.selectSession(modelData.key)
+                  }
                 }
               }
             }
@@ -509,7 +786,7 @@ Panel {
                   width: parent.width
                   text: service.selectedSession ? service.selectedSession.title : strings.t("panel.noSessions")
                   textFormat: Text.PlainText
-                  color: root.foreground
+                  color: root.focusSection === "chat" ? root.accent : root.foreground
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.title
                   font.bold: true
@@ -548,43 +825,77 @@ Panel {
                 anchors.fill: parent
                 clip: true
                 spacing: Style.space(8)
+                topMargin: Style.space(4)
+                bottomMargin: Style.space(4)
+                property bool filledOnce: false
                 model: service.messages
                 onCountChanged: Qt.callLater(function() {
-                  if (messageList.count > 0) messageList.positionViewAtEnd()
+                  if (messageList.count === 0) return
+                  if (messageList.atYEnd || !messageList.filledOnce) {
+                    messageList.positionViewAtEnd()
+                    messageList.filledOnce = true
+                  }
                 })
 
                 delegate: Item {
                   id: messageItem
                   width: ListView.view.width
-                  height: messageBubble.height + Style.space(2)
+                  height: messageColumn.implicitHeight + Style.space(10)
 
                   readonly property bool isUser: modelData.role === "user"
                   readonly property bool isSystem: modelData.role === "system" || modelData.role === "tool"
+                  readonly property color bubbleColor: isUser
+                    ? Util.alpha(root.accent, 0.16)
+                    : (isSystem ? Util.alpha(root.foreground, 0.04) : Util.alpha(root.accent, 0.08))
+                  readonly property color bubbleBorder: isUser
+                    ? Util.alpha(root.accent, 0.34)
+                    : (isSystem ? Util.alpha(root.foreground, 0.10) : Util.alpha(root.accent, 0.20))
 
-                  Rectangle {
-                    id: messageBubble
-                    width: ListView.view.width * (messageItem.isUser ? 0.86 : 0.94)
-                    height: messageText.implicitHeight + Style.space(16)
-                    anchors.right: messageItem.isUser ? parent.right : undefined
-                    anchors.left: messageItem.isUser ? undefined : parent.left
-                    radius: Style.cornerRadius
-                    color: messageItem.isUser
-                      ? Style.selectedStateColor(root.foreground, root.accent)
-                      : Style.controlFill(false, false, root.foreground, root.accent)
-                    opacity: messageItem.isSystem ? 0.75 : 1
+                  Column {
+                    id: messageColumn
+                    width: parent.width
+                    spacing: Style.space(3)
 
                     Text {
-                      id: messageText
-                      anchors.fill: parent
-                      anchors.margins: Style.space(8)
-                      text: modelData.text
+                      width: parent.width
+                      horizontalAlignment: messageItem.isUser ? Text.AlignRight : Text.AlignLeft
+                      text: messageItem.isUser
+                        ? strings.t("panel.you")
+                        : (messageItem.isSystem ? strings.t("panel.system") : strings.t("panel.assistant"))
                       textFormat: Text.PlainText
-                      wrapMode: Text.Wrap
-                      color: messageItem.isSystem ? root.dim : root.foreground
+                      color: messageItem.isUser ? root.accent : root.dim
                       font.family: root.fontFamily
-                      font.pixelSize: Style.font.body
-                      font.italic: messageItem.isSystem
-                      verticalAlignment: Text.AlignTop
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                      font.letterSpacing: 1.0
+                    }
+
+                    Rectangle {
+                      id: messageBubble
+                      width: Math.min(parent.width * 0.82, Style.space(460))
+                      height: messageText.implicitHeight + Style.space(16)
+                      anchors.right: messageItem.isUser ? parent.right : undefined
+                      anchors.left: messageItem.isUser ? undefined : parent.left
+                      radius: Style.cornerRadius
+                      color: messageItem.bubbleColor
+                      border.width: 1
+                      border.color: messageItem.bubbleBorder
+
+                      Text {
+                        id: messageText
+                        width: parent.width - Style.space(16)
+                        anchors.centerIn: parent
+                        text: Markdown.format(modelData.text)
+                        textFormat: Text.StyledText
+                        wrapMode: Text.Wrap
+                        color: messageItem.isSystem ? root.dim : root.foreground
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.body
+                        font.italic: messageItem.isSystem
+                        lineHeight: 1.3
+                        lineHeightMode: Text.ProportionalHeight
+                        verticalAlignment: Text.AlignTop
+                      }
                     }
                   }
                 }
@@ -602,11 +913,12 @@ Panel {
             }
 
             Text {
-              visible: service.selectedActive || service.sending
               Layout.fillWidth: true
-              text: service.sending ? strings.t("panel.sending") : strings.t("panel.running")
+              text: service.sending
+                ? strings.t("panel.sending")
+                : (service.selectedActive ? strings.t("panel.running") : strings.t("panel.keyHint"))
               textFormat: Text.PlainText
-              color: root.accent
+              color: service.selectedActive || service.sending ? root.accent : root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
             }
@@ -626,22 +938,179 @@ Panel {
                 accent: root.accent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.body
+                Keys.priority: Keys.BeforeItem
                 onAccepted: root.submit()
-                Keys.onEscapePressed: function(event) {
-                  root.close()
-                  event.accepted = true
+                Keys.onPressed: function(event) {
+                  if (event.key === Qt.Key_F1) {
+                    root.toggleHelp()
+                    event.accepted = true
+                    return
+                  }
+                  if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+                    var backward = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier)
+                    root.cycleFocus(backward ? -1 : 1)
+                    event.accepted = true
+                    return
+                  }
+                  if (event.key === Qt.Key_Escape) {
+                    if (root.helpOpen) {
+                      root.helpOpen = false
+                      root.focusSectionNow("sessions")
+                    } else if (root.settingsOpen) {
+                      root.closeSettings()
+                    } else {
+                      root.close()
+                    }
+                    event.accepted = true
+                  }
                 }
               }
 
               Button {
                 text: service.sending ? strings.t("panel.sending") : strings.t("panel.send")
                 bordered: true
-                focusable: true
+                focusable: false
                 enabled: input.text.trim() !== "" && !service.sending && service.status === "online"
                 fontFamily: root.fontFamily
                 foreground: root.foreground
                 accent: root.accent
                 onClicked: root.submit()
+              }
+            }
+          }
+        }
+      }
+
+      Rectangle {
+        id: overlay
+        anchors.fill: parent
+        visible: root.settingsOpen || root.helpOpen
+        z: 20
+        color: Color.popups.background
+        border.width: 1
+        border.color: Util.alpha(root.foreground, 0.18)
+        radius: Style.cornerRadius
+
+        MouseArea {
+          anchors.fill: parent
+          onClicked: {}
+        }
+
+        Column {
+          id: overlayContent
+          anchors.fill: parent
+          anchors.margins: Style.space(16)
+          spacing: Style.space(10)
+
+          Text {
+            width: parent.width
+            text: root.settingsOpen ? strings.t("settings.title") : strings.t("help.title")
+            textFormat: Text.PlainText
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.heading
+            font.bold: true
+          }
+
+          Text {
+            width: parent.width
+            text: root.settingsOpen ? strings.t("settings.hint") : strings.t("help.hint")
+            textFormat: Text.PlainText
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+          }
+
+          Column {
+            visible: root.settingsOpen
+            width: parent.width
+            spacing: Style.space(4)
+
+            Repeater {
+              model: root.settingsRows
+              delegate: Item {
+                id: settingRow
+                width: overlayContent.width
+                height: settingLabel.implicitHeight + Style.space(10)
+                readonly property bool cursor: index === root.settingsCursor
+
+                Rectangle {
+                  anchors.fill: parent
+                  color: settingRow.cursor ? Util.alpha(root.accent, 0.14) : "transparent"
+                  radius: Style.cornerRadius
+                }
+
+                Text {
+                  id: settingLabel
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.space(8)
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: parent.width - settingValue.width - Style.space(24)
+                  text: (settingRow.cursor ? "› " : "  ") + modelData.label
+                  textFormat: Text.PlainText
+                  color: settingRow.cursor ? root.accent : root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: settingRow.cursor
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  id: settingValue
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.space(8)
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.settingDisplay(modelData)
+                  textFormat: Text.PlainText
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.settingsCursor = index
+                    root.toggleSetting(index)
+                  }
+                }
+              }
+            }
+          }
+
+          Column {
+            visible: root.helpOpen
+            width: parent.width
+            spacing: Style.space(6)
+
+            Repeater {
+              model: root.shortcutRows
+              delegate: Row {
+                width: overlayContent.width
+                spacing: Style.space(12)
+
+                Text {
+                  width: Style.space(150)
+                  text: modelData.key
+                  textFormat: Text.PlainText
+                  color: root.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                }
+
+                Text {
+                  width: parent.width - Style.space(162)
+                  text: modelData.label
+                  textFormat: Text.PlainText
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.WordWrap
+                }
               }
             }
           }
@@ -653,5 +1122,12 @@ Panel {
   Process {
     id: copyProcess
     command: []
+  }
+
+  Process {
+    id: settingsProcess
+    onExited: function(exitCode) {
+      if (exitCode !== 0) console.warn("openclaw settings update failed", exitCode)
+    }
   }
 }

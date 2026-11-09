@@ -12,6 +12,7 @@ Item {
 
   property var settings: ({})
   property var settingsKey: ""
+  property string bridgeKey: ""
   property bool configured: false
   property bool panelOpen: false
   property var openPanels: []
@@ -48,7 +49,8 @@ Item {
 
   readonly property string bridgePath: decodeURIComponent(String(Qt.resolvedUrl("bridge.mjs")).replace(/^file:\/\//, ""))
   readonly property string pluginDir: bridgePath.substring(0, bridgePath.lastIndexOf("/"))
-  readonly property string iconPath: decodeURIComponent(String(Qt.resolvedUrl("assets/openclaw.svg")).replace(/^file:\/\//, ""))
+  readonly property string iconPath: decodeURIComponent(String(Qt.resolvedUrl("assets/openclaw.png")).replace(/^file:\/\//, ""))
+  readonly property string iconInstallScript: decodeURIComponent(String(Qt.resolvedUrl("install-icon.sh")).replace(/^file:\/\//, ""))
   readonly property string nodePath: String(setting("nodePath", "/usr/bin/node"))
   readonly property string gatewayUrl: String(setting("gatewayUrl", ""))
   readonly property string gatewayToken: String(setting("gatewayToken", ""))
@@ -69,9 +71,20 @@ Item {
     return value === undefined || value === null ? fallback : value
   }
 
+  function shorten(value, max) {
+    var text = String(value || "").replace(/\s+/g, " ").trim()
+    return text.length > max ? text.slice(0, max) + "…" : text
+  }
+
   function applySettings(value) {
     var next = value && typeof value === "object" ? value : ({})
     var key = JSON.stringify(next)
+    var bridgeSettings = JSON.stringify([
+      String(next.gatewayUrl || ""),
+      String(next.gatewayToken || ""),
+      Number(next.maxSessions || 20),
+      String(next.nodePath || "/usr/bin/node")
+    ])
     var changed = key !== settingsKey
     if (changed) {
       settings = next
@@ -79,9 +92,11 @@ Item {
     }
     if (!configured) {
       configured = true
+      bridgeKey = bridgeSettings
       bridge.running = true
-    } else if (changed && bridge.running) {
-      bridge.running = false
+    } else if (bridgeSettings !== bridgeKey) {
+      bridgeKey = bridgeSettings
+      if (bridge.running) bridge.running = false
       restartTimer.restart()
     }
   }
@@ -284,9 +299,12 @@ Item {
     finished(session, preview)
     if (!notificationsEnabled) return
     if (notifyOnlyWhenClosed && panelOpen) return
-    var name = String(session.title || session.agentId || "OpenClaw")
+    var agent = String(session.agentId || "").trim()
+    var name = agent || shorten(String(session.title || "OpenClaw"), 40)
     var title = strings.t("notify.finishedTitle").arg(name)
-    var body = preview ? preview : strings.t("notify.finishedBody")
+    var detail = shorten(String(session.title || ""), 80)
+    var body = preview || strings.t("notify.finishedBody")
+    if (detail && detail !== name) body = detail + " · " + body
     queueNotification(title, body)
   }
 
@@ -302,9 +320,10 @@ Item {
     notifier.command = [
       "omarchy", "notification", "send",
       "--app-name", "OpenClaw",
-      "-i", root.iconPath,
+      "-i", "openclaw",
       "-u", "normal",
-      next.title, next.body
+      next.title, next.body,
+      "--exec", "omarchy-shell", "alexandrlebegue.openclaw", "open"
     ]
     notifier.running = true
   }
@@ -374,5 +393,22 @@ Item {
   Process {
     id: notifier
     onExited: root.drainNotifications()
+    stderr: SplitParser {
+      onRead: function(line) {
+        var text = String(line || "")
+        if (text.length > 0) console.warn("openclaw notify", text)
+      }
+    }
   }
+
+  Process {
+    id: iconInstaller
+    command: ["sh", root.iconInstallScript, root.iconPath]
+    running: false
+    onExited: function(exitCode) {
+      if (exitCode !== 0) console.warn("openclaw icon install failed", exitCode)
+    }
+  }
+
+  Component.onCompleted: iconInstaller.running = true
 }

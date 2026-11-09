@@ -541,14 +541,35 @@ function applySessions(rows, reason = "") {
   emitSessions(reason);
 }
 
+function friendlySessionTitle(row, key) {
+  const explicit = row?.title ?? row?.displayName ?? row?.label ?? row?.name ?? row?.subject;
+  if (explicit && String(explicit).trim()) return truncate(String(explicit).trim(), 120);
+
+  let rest = String(key || "");
+  if (rest.startsWith("agent:")) {
+    const parts = rest.split(":");
+    rest = parts.slice(2).join(":");
+  }
+  if (!rest || rest === "main") return "Main session";
+  if (rest.includes("openai-user")) {
+    const id = rest.split(":").filter(Boolean).pop() || "";
+    return `OpenAI · ${id.slice(0, 8)}`;
+  }
+  if (rest.startsWith("webchat")) return "WebChat";
+  if (rest.startsWith("cron")) return "Cron";
+  if (rest.startsWith("subagent")) return "Subagent";
+  return rest
+    .replace(/[:._-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .slice(0, 80);
+}
+
 function normalizeSession(row) {
   const key = String(row?.key ?? row?.sessionKey ?? row?.id ?? "");
   const lastActivityAt = Number(
     row?.lastActivityAt ?? row?.lastInteractionAt ?? row?.updatedAt ?? row?.createdAt ?? 0,
   );
-  const title = String(
-    row?.title ?? row?.displayName ?? row?.label ?? row?.name ?? row?.subject ?? key,
-  ).trim();
+  const title = friendlySessionTitle(row, key);
   return {
     key,
     sessionId: String(row?.sessionId ?? row?.sessionIdCurrent ?? ""),
@@ -689,6 +710,10 @@ function normalizeMessages(messages) {
   const out = [];
   for (const message of messages) {
     const normalized = normalizeMessage(message);
+    if (normalized.role === "tool") continue;
+    if (normalized.role === "system" && normalized.kind !== "reset" && normalized.kind !== "compaction") {
+      continue;
+    }
     if (!normalized.text && normalized.kind !== "reset" && normalized.kind !== "compaction") continue;
     out.push(normalized);
   }

@@ -25,10 +25,16 @@ OpenClaw panel
 
 ## Features
 
+- **Official OpenClaw logo** in the bar, the panel header, and desktop
+  notifications, tinted to the active Omarchy theme.
 - **One bar icon** with gateway status, active-run pulse, and unread badge.
 - **Native Omarchy panel**: agent/session list, transcript, send, and stop.
 - **Desktop notifications** through `omarchy notification send` when any agent
-  finishes, with the agent name and a short preview.
+  finishes, with the agent name and a short preview. Clicking a notification
+  opens the panel.
+- **Full keyboard control**: Tab between agents, transcript, and composer;
+  ↑/↓ to move between discussions; Enter to open one; F1 for the shortcut
+  sheet; `s` for settings.
 - **One shared gateway connection** for every monitor: the plugin is a shell
   service, so the bridge runs once even when the bar exists on several outputs.
 - **Uses your existing OpenClaw credentials**: gateway URL and token are read
@@ -37,6 +43,7 @@ OpenClaw panel
   approving one device also unblocks the CLI.
 - **No polling for chat**: `sessions.subscribe` and session message events drive
   the UI; a fallback refresh keeps it honest after reconnects.
+- **English and French** catalogs, following Omarchy's language setting.
 
 ## Requirements
 
@@ -94,15 +101,47 @@ OpenClaw Control UI or mobile app. Then press **Retry** in the panel. The
 device token is stored in `~/.local/state/omarchy-openclaw/tokens.json` with
 mode `0600`.
 
+## Keyboard
+
+Open the panel with a left click on the bar icon, or right click to open it
+ready to type. The panel is fully usable without the mouse:
+
+| Key | Action |
+| --- | --- |
+| `Tab` / `Shift+Tab` | Move between agents, transcript, and message composer |
+| `↑` / `↓` | Move between discussions (the transcript follows) or scroll the transcript |
+| `Enter` | Open the selected discussion and focus the composer |
+| `i` | Focus the composer |
+| `r` | Refresh sessions |
+| `x` | Stop the active agent |
+| `s` or `,` | Open settings |
+| `F1` or `?` | Open the shortcut sheet |
+| `Esc` | Close settings/help, then the panel |
+
+Settings can be changed with `↑`/`↓` and `Enter`; they are written back to
+`~/.config/omarchy/shell.json` immediately.
+
+### Global shortcut
+
+Add this to `~/.config/hypr/bindings.lua` to open or close OpenClaw from
+anywhere:
+
+```lua
+o.bind("SUPER + ALT + O", "OpenClaw", "omarchy-shell alexandrlebegue.openclaw toggle")
+```
+
+Then reload Hyprland (`hyprctl reload`). The shortcut sheet (`F1`) lists it.
+
 ## Configuration
 
-The plugin reads the remote gateway from `~/.openclaw/openclaw.json`:
+The plugin reads the remote gateway from `~/.openclaw/openclaw.json` (use your
+LAN, Tailscale, or loopback URL):
 
 ```json
 {
   "gateway": {
     "remote": {
-      "url": "ws://192.168.1.57:18789",
+      "url": "ws://127.0.0.1:18789",
       "token": "…"
     }
   }
@@ -135,10 +174,12 @@ Per-widget overrides can also be set in `~/.config/omarchy/shell.json`:
 
 | File | Role |
 | --- | --- |
-| `Service.qml` | One shell-level service per session. Owns the bridge process, connection state, sessions, transcript, unread counters, and notifications. |
+| `Service.qml` | One shell-level service per session. Owns the bridge process, connection state, sessions, transcript, unread counters, notifications, and the notification icon install. |
 | `bridge.mjs` | Node process. Connects to the Gateway with `@openclaw/gateway-client`, subscribes to `sessions.changed`, serves `chat.history` / `chat.send` / `chat.abort`, and prints JSON lines. |
-| `Panel.qml` | Bar widget and `KeyboardPanel` chat UI. Binds to the shared service. |
-| `TintedIcon.qml` | Masks the OpenClaw SVG with the theme foreground so it stays readable on every theme. |
+| `Panel.qml` | Bar widget and `KeyboardPanel` chat UI, plus the settings and shortcut overlays. Binds to the shared service. |
+| `FocusCatcher.qml` | Keyboard dispatcher for Tab, arrows, Enter, F1, Escape, and the single-key actions. |
+| `TintedIcon.qml` | Masks the official OpenClaw PNG with the theme foreground so it stays readable on every theme. |
+| `install-icon.sh` | Installs the logo into the user hicolor icon theme so notifications can use `-i openclaw`. |
 | `i18n/` | English and French catalogs, following the Omarchy language setting. |
 
 ## Troubleshooting
@@ -181,3 +222,6 @@ manifest or the service entry point changes.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The MIT license covers the plugin code. The OpenClaw name and logo belong to
+the OpenClaw project; the logo asset is included for identification only.
